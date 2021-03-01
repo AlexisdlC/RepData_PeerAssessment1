@@ -1,25 +1,156 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research : Peer assesment 1"
+author: "Alexis de la Cotte"
+date: "2/27/2021"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+# Step 1: Load the data
+
+```{r}
+data <- read.csv(file = 'activity.csv')
+summary(data)
+```
+
+As can be seen above, the dataset contains 3 columns:
+
+- steps: number of steps taken in a 5min interval
+- date: the date in YYYY-MM-DD format
+- interval: the identifier of the 5min interval
+
+Right now the date column is still considered as 'character' type, so lets convert it to be an actual date:
+
+```{r}
+data$date <- as.Date(data$date)
+summary(data)
+```
+Also the interval should correspond to an hour format, so let's convert it as well:
+
+```{r}
+
+data$interval <- sub("([0-9]{2})([0-9]{2})", "\\1:\\2",sprintf('%04d',data$interval))
+summary(data)
+```
+
+Now the dataframe is ready. Each date is in date format, and each interval is 4 character string representing the time interval in the format "HHMM".
+
+# Step 2: Histogram of total number of steps taken each day
+
+First we want to group the data by day and get the sum:
+
+```{r}
+data_step_day <- tapply(data$steps,data$date,FUN = sum, na.rm = TRUE)
+summary(data_step_day)
+```
+
+The distribution has a mean of `r format(round(mean(data_step_day)),scientific = FALSE)` and a median of `r format(round(median(data_step_day)), scientific = FALSE)`.
+
+We can then look at a histogram of the distribution:
+
+```{r}
+
+hist(data_step_day,breaks = 10, main = 'Histogram of the number of steps taken per day', xlab = 'Number of steps', ylab = 'Frequency')
+```
 
 
+There is quite a large number of days where a few number of steps were taken. This is probably due to the presence of "NA"s in the data frame, we will correct for this in step 4.
 
-## What is mean total number of steps taken per day?
+# Step 3: Mean average number of step time series
 
+We want to look for the span of 24h, what is the average number of steps taken in each of the 5min interval.
+First we want to group the data by interval:
 
+```{r}
+data_avstep_interval <- tapply(data$steps, data$interval, FUN = mean, na.rm = TRUE)
+summary(data_avstep_interval)
+```
+The maximum average steps taken is `r round(max(data_avstep_interval))` for the 5min interval starting at `r names(which(data_avstep_interval == max(data_avstep_interval)))`.
 
-## What is the average daily activity pattern?
+We can also look now at the time series of the average number of steps:
 
+```{r}
+plot(data_avstep_interval, type = "S", main = 'Time series of the average number of step taken throughout the day', ylab = 'Average number of steps', xlab = 'Time', xaxt = 'n')
+axis(1,at = seq(1,length(data_avstep_interval),20) , labels = names(data_avstep_interval[(seq(1,length(data_avstep_interval),20))]))
+```
 
+# Step 4: Inputing missing data
 
-## Imputing missing values
+Some rows in the original data is "NA", and it would be good to replace these with some actual numbers. The best strategy, I believe, is to replace them by the rounded average of the given time interval.
 
+```{r}
+for(row in 1:nrow(data)){
+ 
+      if(is.na(data[row,]$steps)){
+            
+         data[row,]$steps = round(data_avstep_interval[data[row,]$interval])   
+            
+      }  
+      
 
+}
 
-## Are there differences in activity patterns between weekdays and weekends?
+summary(data)
+```
+
+As we can be seen in the summary of the dataset, there is no "NA"s anymore in the dataframe. We can then look again at a histogram of the total number of steps taken per day:
+
+```{r}
+data_step_day <- tapply(data$steps,data$date,FUN = sum, na.rm = TRUE)
+hist(data_step_day,breaks = 10, main = 'Histogram of the number of steps taken per day', xlab = 'Number of steps', ylab = 'Frequency')
+
+```
+
+We can see the correction works, the large number of days with a low number of steps taken has fallen.
+
+The new distribution has a mean of `r format(round(mean(data_step_day)), scientific = FALSE)` and a median of `r format(round(median(data_step_day)), scientific = FALSE)`.
+
+# Step 5: Compare average step taken, weekdays vs weekend
+
+First we want to add a week day column in the dataframe:
+
+```{r}
+
+data$weekday <- weekdays(data$date)
+head(data)
+
+```
+
+Then we can create two dataframes one for the week days, one for the weekend:
+
+```{r}
+
+data_weekend <- subset(data, data$weekday == "Sunday" | data$weekday == "Saturday")
+data_weekdays <- subset(data, data$weekday != "Sunday" & data$weekday != "Saturday")
+
+head(data_weekdays)
+head(data_weekend)
+```
+
+We can then get the average number of steps taken for each 5min time interval, segregated by weekdays and weekend.
+
+```{r}
+data_avstep_interval_weekend <- tapply(data_weekend$steps, data_weekend$interval, FUN = mean)
+summary(data_avstep_interval_weekend)
+data_avstep_interval_weekdays <- tapply(data_weekdays$steps, data_weekdays$interval, FUN = mean, na.rm = TRUE)
+summary(data_avstep_interval_weekdays)
+
+```
+
+We can now plot a side by side comparison of the time series of the average number of steps taken, weekend vs weekdays:
+
+```{r}
+par(mfrow = c(1,2))
+
+plot(data_avstep_interval_weekdays, type = "S", main = 'Average number of step taken\n throughout the day - Weekdays', ylab = 'Average number of steps', xlab = 'Time', xaxt = 'n')
+axis(1,at = seq(1,length(data_avstep_interval_weekdays),20) , labels = names(data_avstep_interval[(seq(1,length(data_avstep_interval_weekdays),20))]))
+
+plot(data_avstep_interval_weekend, type = "S", main = 'Average number of step taken\n throughout the day - Weekend', ylab = 'Average number of steps', xlab = 'Time', xaxt = 'n')
+axis(1,at = seq(1,length(data_avstep_interval_weekend),20) , labels = names(data_avstep_interval[(seq(1,length(data_avstep_interval_weekend),20))]))
+
+```
+
+We can see that the activity picks-up earlier during weekdays than the weekend. But the activity then remains quite high during the weekend until the end of the day, when it drops in the weekdays during the working hours.
